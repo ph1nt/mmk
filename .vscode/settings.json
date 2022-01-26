@@ -3,5 +3,6 @@
     "python.linting.pylintEnabled": false,
     "python.analysis.diagnosticSeverityOverrides": {
         "reportMissingModuleSource": "none"
-    }
+    },
+    "python.formatting.provider": "black"
 }

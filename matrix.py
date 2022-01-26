@@ -1,7 +1,5 @@
-import digitalio
 import time
-
-# from microcontroller.pin import *
+from machine import Pin
 
 
 class Matrix:
@@ -23,77 +21,54 @@ class Matrix:
         self.head = 0
         self.tail = 0
         self.length = 0
-
         self.rows = []  # row as output
         for pin in self.ROWS:
-            io = digitalio.DigitalInOut(pin)
-            io.direction = digitalio.Direction.OUTPUT
-            io.drive_mode = digitalio.DriveMode.PUSH_PULL
-            io.value = 0
+            io = Pin(pin, Pin.OUT, Pin.PUSH_PULL)
+            io.value(0)
             self.rows.append(io)
-
         self.cols = []  # col as input
         for pin in self.COLS:
-            io = digitalio.DigitalInOut(pin)
-            io.direction = digitalio.Direction.INPUT
-            io.pull = digitalio.Pull.DOWN if self.ROW2COL else digitalio.Pull.UP
+            io = Pin(pin, Pin.IN, Pin.PULL_DOWN if self.ROW2COL else Pin.PULL_UP)
             self.cols.append(io)
-
         # row selected value depends on diodes' direction
         self.pressed = bool(self.ROW2COL)
-        self.t0 = [0] * self.keys  # key pressed time
-        self.t1 = [0] * self.keys  # key released time
-        self.mask = 0
-        self.count = 0
-        self._debounce_time = 20000000
+        self.last = [0] * self.keys  # key last status
+        self.hold = [0] * self.keys  # key hold state
+        self.matrix = [0] * self.keys  # key current state
+        self._debounce_time = 20000000  # 20 ms
+        self._hold_time = 500000000  # 500 ms
 
     def scan(self):
         """
         Scan keyboard matrix and save key event into the queue.
-
+        //mamy cztery stany
+        - free      pin.value == 0
+        - debounce  wait for stabilisation
+        - tap       single press and release
+        - hold      hold some time
         :return: length of the key event queue.
         """
         t = time.monotonic_ns()
-
         # use local variables to speed up
-        pressed = self.pressed
-        last_mask = self.mask
-        cols = self.cols
-
-        mask = 0
-        count = 0
         key_index = -1
         for row in self.rows:
-            row.value = pressed  # select row
-            for col in cols:
+            row.value = self.pressed  # select row
+            for col in self.cols:
                 key_index += 1
-                if col.value == pressed:
-                    key_mask = 1 << key_index
-                    if not (last_mask & key_mask):
-                        if t - self.t1[key_index] < self._debounce_time:
-                            print("debonce")
-                            continue
+                current = col.value != self.pressed
+                if current != self.last[key_index]:
+                    self.debounce = t
+                self.last[key_index] = current
+                if t - self.debounce > self._debounce_time:
+                    if t - self.debounce > self._hold_time:
+                        # hold detected
+                        if current == 1:
+                            current = 2
+                    # 0 free; 1 pressed; 2 hold
+                    self.matrix[key_index] = current
+            row.value = not self.pressed
 
-                        self.t0[key_index] = t
-                        self.put(key_index)
-
-                    mask |= key_mask
-                    count += 1
-                elif last_mask and (last_mask & (1 << key_index)):
-                    if t - self.t0[key_index] < self._debounce_time:
-                        print("debonce")
-                        mask |= 1 << key_index
-                        continue
-
-                    self.t1[key_index] = t
-                    self.put(0x80 | key_index)
-
-            row.value = not pressed
-        self.mask = mask
-        self.count = count
-
-        return self.length
-
+    # TODO move to RTOS
     def wait(self, timeout=1000):
         """Wait for a new key event or timeout"""
         last = self.length
@@ -126,26 +101,6 @@ class Matrix:
         self.length -= 1
         return data
 
-    def view(self, n):
-        """Return the specified event"""
-        return self.queue[(self.tail + n) % self.keys]
-
-    def __getitem__(self, n):
-        """Return the specified event"""
-        return self.queue[(self.tail + n) % self.keys]
-
-    def __len__(self):
-        """Return the number of events in the queue"""
-        return self.length
-
-    def get_keydown_time(self, key):
-        """Return the key pressed time"""
-        return self.t0[key]
-
-    def get_keyup_time(self, key):
-        """Return the key released time"""
-        return self.t1[key]
-
     def time(self):
         """Return current time"""
         return time.monotonic_ns()
@@ -162,7 +117,3 @@ class Matrix:
     def debounce_time(self, t):
         """Set debounce time"""
         self._debounce_time = t * 1000000
-
-    def suspend(self):
-        """Suspend keyboard"""
-        pass

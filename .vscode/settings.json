@@ -4,5 +4,5 @@
     "python.analysis.diagnosticSeverityOverrides": {
         "reportMissingModuleSource": "none"
     },
-    "python.formatting.provider": "black"
+    "python.formatting.provider": "autopep8"
 }

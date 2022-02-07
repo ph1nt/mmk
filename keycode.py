@@ -1,7 +1,40 @@
 
 ''' Keyboard/Keypad Page(0x07) '''
 
+# 16bit code: action_kind(4bit) + action_parameter(12bit)
+
+# Key Actions(00xx)
+# -----------------
+# ACT_MODS(000r):
+# 000r | 0000 | 0000 0000    No action code
+# 000r | 0000 | 0000 0001    Transparent code
+# 000r | 0000 | keycode     Key
+# 000r | mods | 0000 0000    Modifiers
+# 000r | mods | keycode     Modifiers+Key(Modified key)
+#   r: Left/Right flag(Left: 0, Right: 1)
+
+# ACT_MODS_TAP(001r):
+# 001r | mods | keycode     Modifiers with Tap Key(Dual role)
+# Mods:   43210
+#   bit 0 ||||+- Control
+#   bit 1 |||+-- Shift
+#   bit 2 ||+--- Alt
+#   bit 3 |+---- Gui
+#   bit 4 +----- LR flag(Left: 0, Right: 1)
+
+# Other Keys(01xx)
+# ----------------
+# ACT_USAGE(0100): TODO: Not needed?
+# 0100 | 00 | usage(10)     System control(0x80) - General Desktop page(0x01)
+# 0100 | 01 | usage(10)     Consumer control(0x01) - Consumer page(0x0C)
+
+# ACT_LAYER_TAP(100x):
+# 1llr | mods | keycode     Modifiers with Tap Key(Dual role)
+#   l: layer 00-default, 01-upper, 10-lower, 11-function
 ##
+from asyncio.windows_events import NULL
+
+
 KC_NO = 0x00
 KC_ROLL_OVER = 0x01
 KC_POST_FAIL = 0x02
@@ -298,29 +331,6 @@ def MOD_BIT(code): return (1 << MOD_INDEX(code))
 def MOD_INDEX(code): return ((code) & 0x07)
 
 
-MOD_MASK_CTRL = (MOD_BIT(KC_LCTRL) | MOD_BIT(KC_RCTRL))
-MOD_MASK_SHIFT = (MOD_BIT(KC_LSHIFT) | MOD_BIT(KC_RSHIFT))
-MOD_MASK_ALT = (MOD_BIT(KC_LALT) | MOD_BIT(KC_RALT))
-MOD_MASK_GUI = (MOD_BIT(KC_LGUI) | MOD_BIT(KC_RGUI))
-MOD_MASK_CS = (MOD_MASK_CTRL | MOD_MASK_SHIFT)
-MOD_MASK_CA = (MOD_MASK_CTRL | MOD_MASK_ALT)
-MOD_MASK_CG = (MOD_MASK_CTRL | MOD_MASK_GUI)
-MOD_MASK_SA = (MOD_MASK_SHIFT | MOD_MASK_ALT)
-MOD_MASK_SG = (MOD_MASK_SHIFT | MOD_MASK_GUI)
-MOD_MASK_AG = (MOD_MASK_ALT | MOD_MASK_GUI)
-MOD_MASK_CSA = (MOD_MASK_CTRL | MOD_MASK_SHIFT | MOD_MASK_ALT)
-MOD_MASK_CSG = (MOD_MASK_CTRL | MOD_MASK_SHIFT | MOD_MASK_GUI)
-MOD_MASK_CAG = (MOD_MASK_CTRL | MOD_MASK_ALT | MOD_MASK_GUI)
-MOD_MASK_SAG = (MOD_MASK_SHIFT | MOD_MASK_ALT | MOD_MASK_GUI)
-MOD_MASK_CSAG = (MOD_MASK_CTRL | MOD_MASK_SHIFT | MOD_MASK_ALT | MOD_MASK_GUI)
-
-
-def FN_BIT(code): return (1 << FN_INDEX(code))
-def FN_INDEX(code): return ((code)-KC_FN0)
-
-
-FN_MIN = KC_FN0
-FN_MAX = KC_FN31
 # Short names for ease of definition of keymap
 KC_TRANSPARENT = 0x01
 KC_TRNS = KC_TRANSPARENT
@@ -446,3 +456,45 @@ def IS_SPECIAL(code): return (0xA5 <= (code) and (code) <= 0xDF) or (0xE8 <= (co
 def IS_SYSTEM(code): return (KC_PWR <= (code) and (code) <= KC_WAKE)
 def IS_CONSUMER(code): return (KC_MUTE <= (code) and (code) <= KC_BRID)
 def IS_FN(code): return (KC_FN0 <= (code) and (code) <= KC_FN31)
+
+
+def layer(code):
+    if code and 0x8000:
+        return (code and 0x6000) >> 13
+    else:
+        return NULL
+
+
+def tap(code):
+    return code and 0x1FFF
+
+
+def hold(code):
+    if code and 0x2000:
+        return code and 0x1FFF
+    else:
+        layer(code)
+
+
+def LT(layer, key):
+    return 0x8000 or (layer >> 13) or key
+
+
+def MT(mod, key):
+    return 0x2000 or (mod >> 8) or key
+
+
+def C(code): # Control
+    return 0x0100 or code
+
+
+def S(code): # Shift
+    return 0x0200 or code
+
+
+def A(code): # Alt / Option
+    return 0x0400 or code
+
+
+def G(code): # Gui / Cmd
+    return 0x0800 or code

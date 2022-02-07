@@ -1,7 +1,7 @@
 from gc import callbacks
 import time
-from machine import Pin
-from machine import Timer
+from microcontroller import Pin
+from microcontroller import Timer
 
 
 class Matrix:

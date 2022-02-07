@@ -1,21 +1,11 @@
 import array
 import time
 import struct
-
-import _bleio
 import microcontroller
-import usb_hid
-
-from adafruit_ble import BLERadio
-from adafruit_ble.advertising import Advertisement
-from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
-from adafruit_ble.services.standard import BatteryService
-from adafruit_ble.services.standard.hid import HIDService
-
 from .action_code import *
-from .hid import HID
-from .model import Matrix, COORDS, Backlight, battery_level, key_name
-from .util import usb_is_connected, do_nothing
+from battery import battery_level
+from hid import HID
+from matrix import Matrix
 
 
 class Device:
@@ -39,24 +29,6 @@ class Device:
         keycodes = map(get_action_code, names)
         self.kbd.release(*keycodes)
 
-    def send_text(self, text):
-        shift = False
-        for c in text:
-            keycode = ASCII_TO_KEYCODE[ord(c)]
-            if keycode & 0x80:
-                keycode = keycode & 0x7F
-                if not shift:
-                    shift = True
-                    self.kbd.press(SHIFT)
-            elif shift:
-                self.kbd.release(SHIFT)
-                shift = False
-
-            self.kbd.send(keycode)
-
-        if shift:
-            self.kbd.release(SHIFT)
-
 
 class Keyboard:
     def __init__(self, keymap=(), verbose=True):
@@ -76,7 +48,6 @@ class Keyboard:
         self.fast_type_thresh = 200
         self.pair_delay = 10
         self.adv_timeout = None
-
         size = 4 + self.matrix.keys
         self.data = array.array("L", microcontroller.nvm[: size * 4])
         if self.data[0] != 0x424B5950:
@@ -86,17 +57,12 @@ class Keyboard:
                 self.data[i] = 0
         self.ble_id = self.data[1]
         self.heatmap = memoryview(self.data)[4:]
-
-        ble_hid = HIDService()
-        self.battery = BatteryService()
         self.battery.level = battery_level()
-        self.battery_update_time = time.time() + 360
         self.advertisement = ProvideServicesAdvertisement(ble_hid, self.battery)
         self.advertisement.appearance = 961
         self.ble = BLERadio()
         self.set_bt_id(self.ble_id)
         self.ble_hid = HID(ble_hid.devices)
-        self.usb_hid = HID(usb_hid.devices)
 
     def on_device_changed(self, name):
         print("change to {}".format(name))
@@ -104,7 +70,6 @@ class Keyboard:
             self.actionmap = self.actionmaps[name]
         else:
             self.actionmap = self.default_actionmap
-
         # reset `layer_mask` when keymap is changed
         self.layer_mask = 1
 
@@ -115,23 +80,11 @@ class Keyboard:
                 self.backlight.set_bt_led(None)
             elif time.time() > self.adv_timeout:
                 self.stop_advertising()
-
-        if usb_is_connected():
-            if self.usb_status == 0:
-                self.usb_status = 3
-                self.on_device_changed("USB")
-        else:
-            if self.usb_status == 3:
-                self.on_device_changed("BT{}".format(self.ble_id))
-                if not self.ble.connected and not self.ble._adapter.advertising:
-                    self.start_advertising()
-            self.usb_status = 0
-
-        if self.usb_status == 3:
-            self.backlight.set_hid_leds(self.usb_hid.leds)
+            self.on_device_changed("BT{}".format(self.ble_id))
+            if not self.ble.connected and not self.ble._adapter.advertising:
+                self.start_advertising()
         elif self.ble.connected:
             self.backlight.set_hid_leds(self.ble_hid.leds)
-
         # update battery level
         if time.time() > self.battery_update_time:
             self.battery_update_time = time.time() + 3600
@@ -146,7 +99,6 @@ class Keyboard:
             self.actionmaps[key] = tuple(
                 convert(layer) for layer in self.profiles[key]
             )
-
         for pair in self.pairs:
             for key in pair:
                 self.pair_keys.add(key)
@@ -176,7 +128,6 @@ class Keyboard:
         else:
             desc += " / "
             t0 = matrix.get_keyup_time(key)
-
         t = []
         for i in range(start, end):
             event = matrix.view(i)
@@ -191,7 +142,6 @@ class Keyboard:
             dt = matrix.ms(t1 - t0)
             t0 = t1
             t.append(dt)
-
         return desc, t
 
     def is_tapping_key(self, key):
@@ -218,7 +168,6 @@ class Keyboard:
                     print(desc)
                     print(t)
                 return True
-
             if n == 1:
                 n = matrix.wait(
                     self.fast_type_thresh
@@ -226,7 +175,6 @@ class Keyboard:
                 )
         if n < 2:
             return False
-
         if target == matrix.view(1):
             # Fast Typing - B is a tap-key
             #   B↓      C↓      B↑      C↑
@@ -238,25 +186,21 @@ class Keyboard:
                 print(desc)
                 print(t)
             return True
-
         if self.verbose:
             desc, t = self.get_key_sequence_info(-1, n)
             print(desc)
             print(t)
-
         return False
 
     def set_bt_id(self, n):
         if 0 > n or n > 9:
             n = 0
-
         if self.ble.connected:
             self.ble_hid.release_all()
             for c in self.ble.connections:
                 c.disconnect()
         if self.ble._adapter.advertising:
             self.ble.stop_advertising()
-
         uid = self.uid[n: n + 6]
         uid[-1] = uid[-1] | 0xC0
         address = _bleio.Address(uid, _bleio.Address.RANDOM_STATIC)
@@ -284,40 +228,8 @@ class Keyboard:
             self.start_advertising()
         elif not self.ble.connected and not self.ble._adapter.advertising:
             self.start_advertising()
-
         if changed:
             self.on_device_changed("BT{}".format(n))
-
-    def toggle_bt(self):
-        bt_is_off = True
-        if self.ble.connected:
-            self.ble_hid.release_all()
-            for c in self.ble.connections:
-                c.disconnect()
-        elif self.ble._adapter.advertising:
-            self.stop_advertising()
-        else:
-            self.start_advertising()
-            bt_is_off = False
-        if bt_is_off:
-            if usb_is_connected() and self.usb_status != 3:
-                self.usb_status = 3
-                self.on_device_changed("USB")
-        else:
-            if self.usb_status == 3:
-                self.usb_status = 1
-                self.on_device_changed("BT{}".format(self.ble_id))
-
-    def toggle_usb(self):
-        if self.usb_status == 3:
-            self.usb_status = 1
-            self.usb_hid.release_all()
-            if not self.ble.connected and not self.ble._adapter.advertising:
-                self.start_advertising()
-            self.on_device_changed("BT{}".format(self.ble_id))
-        elif usb_is_connected():
-            self.usb_status = 3
-            self.on_device_changed("USB")
 
     def action_code(self, position):
         position = COORDS[position]
@@ -367,33 +279,6 @@ class Keyboard:
         except Exception as e:
             print(e)
 
-    def press_mouse(self, buttons):
-        try:
-            if self.usb_status == 0x3 and usb_is_connected():
-                self.usb_hid.press_mouse(buttons)
-            elif self.ble.connected:
-                self.ble_hid.press_mouse(buttons)
-        except Exception as e:
-            print(e)
-
-    def release_mouse(self, buttons):
-        try:
-            if self.usb_status == 0x3 and usb_is_connected():
-                self.usb_hid.release_mouse(buttons)
-            elif self.ble.connected:
-                self.ble_hid.release_mouse(buttons)
-        except Exception as e:
-            print(e)
-
-    def move_mouse(self, x=0, y=0, wheel=0):
-        try:
-            if self.usb_status == 0x3 and usb_is_connected():
-                self.usb_hid.move_mouse(x, y, wheel)
-            elif self.ble.connected:
-                self.ble_hid.move_mouse(x, y, wheel)
-        except Exception as e:
-            print(e)
-
     def get(self):
         event = self.matrix.get()
         key = event & 0x7F
@@ -417,7 +302,6 @@ class Keyboard:
             t = 20 if self.backlight.check() or mouse_action else 1000
             n = matrix.wait(t)
             self.check()
-
             if self.pair_keys:
                 # detecting pair keys
                 if n == 1:
@@ -427,14 +311,12 @@ class Keyboard:
                             self.pair_delay
                             - ms(matrix.time() - matrix.get_keydown_time(key))
                         )
-
                 if n >= 2:
                     pair = {matrix.view(0), matrix.view(1)}
                     if pair in self.pairs:
                         pair_index = self.pairs.index(pair)
                         key1 = self.get()
                         key2 = self.get()
-
                         dt = ms(
                             matrix.get_keydown_time(key2)
                             - matrix.get_keydown_time(key1)
@@ -444,7 +326,6 @@ class Keyboard:
                             self.pairs_handler(dev, pair_index)
                         except Exception as e:
                             print(e)
-
             while len(matrix):
                 event = self.get()
                 key = event & 0x7F
@@ -504,7 +385,6 @@ class Keyboard:
                                     self.press(keycode)
                             else:
                                 self.layer_mask |= mask
-
                             log("layer_mask = {}".format(self.layer_mask))
                         elif kind == ACT_MACRO:
                             if callable(self.macro_handler):
@@ -552,7 +432,6 @@ class Keyboard:
                                 i = action_code - BT(0)
                                 log("switch to bt {}".format(i))
                                 self.change_bt(i)
-
                     if self.verbose:
                         keydown_time = matrix.get_keydown_time(key)
                         dt = ms(matrix.time() - keydown_time)
@@ -605,7 +484,6 @@ class Keyboard:
                                 self.macro_handler(dev, i, False)
                             except Exception as e:
                                 print(e)
-
                     if self.verbose:
                         keyup_time = matrix.get_keyup_time(key)
                         dt = ms(matrix.time() - keyup_time)
@@ -616,7 +494,6 @@ class Keyboard:
                                 key, key_name(key), hex(action_code), dt, dt2
                             )
                         )
-
             if mouse_action:
                 x, y, wheel = MS_MOVEMENT[mouse_action]
                 dt = 1 + (time.monotonic_ns() - mouse_time) // 8000000
@@ -625,7 +502,6 @@ class Keyboard:
 
 
 keyboard = Keyboard()
-
 ___ = TRANSPARENT
 BOOT = BOOTLOADER
 L1 = LAYER_TAP(1)
@@ -634,11 +510,9 @@ L3B = LAYER_TAP(3, B)
 LSFT4 = LAYER_MODS(4, MODS(LSHIFT))
 RSFT4 = LAYER_MODS(4, MODS(RSHIFT))
 L5S = LAYER_TAP(5, S)
-
 # Semicolon & Ctrl
 SCC = MODS_TAP(MODS(RCTRL), ';')
 SINS = MODS_KEY(MODS(SHIFT), INSERT)
-
 keyboard.keymap = (
     # layer 0
     (
@@ -648,34 +522,30 @@ keyboard.keymap = (
         LSFT4, Z,   X,   C,   V, L3B,   N,   M, ',', '.', '/',         RSFT4,
         LCTRL, LGUI, LALT,          SPACE,            RALT, MENU,  L1, RCTRL
     ),
-
     # layer 1
     (
         '`',  F1,  F2,  F3,  F4,  F5,  F6,  F7,  F8,  F9, F10, F11, F12, DEL,
-        ___, ___,  UP, ___, ___, ___, ___, ___, ___, ___,SUSPEND,___,___,___,
-        ___,LEFT,DOWN,RIGHT,___, ___, ___, ___, ___, ___, ___, ___,      ___,
-        ___, ___, ___, ___, ___,BOOT, ___,MACRO(0), ___, ___, ___,       ___,
+        ___, ___,  UP, ___, ___, ___, ___, ___, ___, ___, SUSPEND, ___, ___, ___,
+        ___, LEFT, DOWN, RIGHT, ___, ___, ___, ___, ___, ___, ___, ___,      ___,
+        ___, ___, ___, ___, ___, BOOT, ___, MACRO(0), ___, ___, ___,       ___,
         ___, ___, ___,                ___,               ___, ___, ___,  ___
     ),
-
     # layer 2
     (
         '`',  F1,  F2,  F3,  F4,  F5,  F6,  F7,  F8,  F9, F10, F11, F12, DEL,
-        ___, ___, ___, ___, ___, ___,HOME,PGUP, ___, ___,SINS,AUDIO_VOL_DOWN,AUDIO_VOL_UP,AUDIO_MUTE,
-        ___, ___, ___, ___, ___, ___,LEFT,DOWN, UP,RIGHT, ___, ___,      ___,
-        ___, ___, ___, ___, ___, ___,PGDN,END, ___, ___, ___,           ___,
+        ___, ___, ___, ___, ___, ___, HOME, PGUP, ___, ___, SINS, AUDIO_VOL_DOWN, AUDIO_VOL_UP, AUDIO_MUTE,
+        ___, ___, ___, ___, ___, ___, LEFT, DOWN, UP, RIGHT, ___, ___,      ___,
+        ___, ___, ___, ___, ___, ___, PGDN, END, ___, ___, ___,           ___,
         ___, ___, ___,                ___,               ___, ___, ___,  ___
     ),
-
     # layer 3
     (
-        BT_TOGGLE,BT1,BT2, BT3,BT4,BT5,BT6,BT7, BT8, BT9, BT0, ___, ___, ___,
-        RGB_MOD, ___, ___, ___, ___, ___,___,USB_TOGGLE,___,___,___,___,___, ___,
-        RGB_TOGGLE,HUE_RGB,RGB_HUE,SAT_RGB,RGB_SAT,___,___,___,___,___,___,___,      ___,
-        ___, ___, ___, ___, ___, ___, ___, ___,VAL_RGB,RGB_VAL, ___,           ___,
+        BT_TOGGLE, BT1, BT2, BT3, BT4, BT5, BT6, BT7, BT8, BT9, BT0, ___, ___, ___,
+        RGB_MOD, ___, ___, ___, ___, ___, ___, USB_TOGGLE, ___, ___, ___, ___, ___, ___,
+        RGB_TOGGLE, HUE_RGB, RGB_HUE, SAT_RGB, RGB_SAT, ___, ___, ___, ___, ___, ___, ___,      ___,
+        ___, ___, ___, ___, ___, ___, ___, ___, VAL_RGB, RGB_VAL, ___,           ___,
         ___, ___, ___,                ___,               ___, ___, ___,  ___
     ),
-
     # layer 4
     (
         '`', ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___,
@@ -684,17 +554,15 @@ keyboard.keymap = (
         ___, ___, ___, ___, ___,   B, ___, ___, ___, ___, ___,           ___,
         ___, ___, ___,                ___,               ___, ___, ___,  ___
     ),
-
     # layer 5
     (
         ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___, ___,
-        ___, ___, ___, ___, ___, ___,MS_W_UP,MS_UL,MS_UP,MS_UR, ___, ___, ___, ___,
-        ___, ___, ___, ___, ___, ___,MS_BTN1,MS_LT,MS_DN,MS_RT,MS_BTN2, ___,      ___,
-        ___, ___, ___, ___, ___, ___,MS_W_DN,MS_DL,MS_DN,MS_DR, ___,           ___,
+        ___, ___, ___, ___, ___, ___, MS_W_UP, MS_UL, MS_UP, MS_UR, ___, ___, ___, ___,
+        ___, ___, ___, ___, ___, ___, MS_BTN1, MS_LT, MS_DN, MS_RT, MS_BTN2, ___,      ___,
+        ___, ___, ___, ___, ___, ___, MS_W_DN, MS_DL, MS_DN, MS_DR, ___,           ___,
         ___, ___, ___,                ___,               ___, ___, ___,  ___
     ),
 )
-
 # Use different keymaps on different connections
 # Valid keys are "USB" and "BT0"-"BT9"
 # Connection not in this map will use default keymap defined above.
@@ -706,20 +574,20 @@ keyboard.profiles = {
             ESC,   1,   2,   3,   4,   5,   6,   7,   8,   9,   0, '-', '=', BACKSPACE,
             TAB,   Q,   W,   E,   R,   T,   Y,   U,   I,   O,   P, '[', ']', '|',
             CAPS,  A,   S,   D,   F,   G,   H,   J,   K,   L, SCC, '"',    ENTER,
-            LSHIFT,Z,   X,   C,   V,   B,   N,   M, ',', '.', '/',        RSHIFT,
+            LSHIFT, Z,   X,   C,   V,   B,   N,   M, ',', '.', '/',        RSHIFT,
             LCTRL, LALT, LGUI,          SPACE,            MENU, RALT,  L1, RCTRL
         ),
-
         # layer 1
         (
             '`',  F1,  F2,  F3,  F4,  F5,  F6,  F7,  F8,  F9, F10, F11, F12, DEL,
-            ___, ___,  UP, ___, ___, ___, ___, ___, ___, ___,SUSPEND,___,___,___,
-            ___,LEFT,DOWN,RIGHT,___, ___, ___, ___, ___, ___, ___, ___,      ___,
-            ___, ___, ___, ___, ___,BOOT, ___,MACRO(1), ___, ___, ___,       ___,
+            ___, ___,  UP, ___, ___, ___, ___, ___, ___, ___, SUSPEND, ___, ___, ___,
+            ___, LEFT, DOWN, RIGHT, ___, ___, ___, ___, ___, ___, ___, ___,      ___,
+            ___, ___, ___, ___, ___, BOOT, ___, MACRO(1), ___, ___, ___,       ___,
             ___, ___, ___,                ___,               ___, ___, ___,  ___
         ),
     )
 }
+
 
 def macro_handler(dev, n, is_down):
     if is_down:
@@ -727,22 +595,19 @@ def macro_handler(dev, n, is_down):
     else:
         dev.send_text('You released macro #{}\n'.format(n))
 
+
 def pairs_handler(dev, n):
     dev.send_text('You just triggered pair keys #{}\n'.format(n))
 
 
 keyboard.macro_handler = macro_handler
 keyboard.pairs_handler = pairs_handler
-
 # ESC(0)    1(1)   2(2)   3(3)   4(4)   5(5)   6(6)   7(7)   8(8)   9(9)   0(10)  -(11)  =(12)  BACKSPACE(13)
 # TAB(27)   Q(26)  W(25)  E(24)  R(23)  T(22)  Y(21)  U(20)  I(19)  O(18)  P(17)  [(16)  ](15)   \(14)
 # CAPS(28)  A(29)  S(30)  D(31)  F(32)  G(33)  H(34)  J(35)  K(36)  L(37)  ;(38)  "(39)      ENTER(40)
-#LSHIFT(52) Z(51)  X(50)  C(49)  V(48)  B(47)  N(46)  M(45)  ,(44)  .(43)  /(42)            RSHIFT(41)
+# LSHIFT(52) Z(51)  X(50)  C(49)  V(48)  B(47)  N(46)  M(45)  ,(44)  .(43)  /(42)            RSHIFT(41)
 # LCTRL(53)  LGUI(54)  LALT(55)               SPACE(56)          RALT(57)  MENU(58)  Fn(59)  RCTRL(60)
-
 # Pairs: J & K, U & I
 keyboard.pairs = [{35, 36}, {20, 19}]
-
 # keyboard.verbose = False
-
 keyboard.run()

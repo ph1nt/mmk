@@ -36,7 +36,7 @@ KEYS_MAP = (
     [KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,
      KM_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN,
      KM_Z,    KM_X,    KM_C,    KM_V,    KC_B,    KC_N,    KC_M,    KC_COMMA,KC_DOT,  KC_SLASH,
-     KC_NO,   KM_TILD, KM_ESC,  LOWER,   KM_ENTER,KM_SPACE,UPPER,   KC_MUTE,   KC_NO,   KC_NO],
+     KC_NO,   KM_TILD, KM_ESC,  LOWER,   KM_ENTER,KM_SPACE,UPPER,   KC_MUTE, KC_POWER, KC_NO],
 # numbers
     [KC_1,    KC_2,    KC_3,    KC_4,    KC_5,    KC_6,    KC_7,    KC_8,    KC_9,    KC_0,
      KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_LBRC, KC_RBRC, KM_PLUS, KC_MINUS,KC_EQUAL,

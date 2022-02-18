@@ -1,7 +1,10 @@
-from gc import callbacks
+##from gc import callbacks
 import time
-from microcontroller import Pin
-from microcontroller import Timer
+from keyboard import KEYS_MAP
+from numpy import matrix
+from keycode import layer
+from machine import Pin
+from machine import Timer
 
 
 class Matrix:
@@ -9,39 +12,34 @@ class Matrix:
     Implement the scan of keyboard matrix
     """
 
-    # ROWS = (P0_05, P0_06, P0_07, P0_08, P1_09, P1_08, P0_12, P0_11)
-    # COLS = (P0_19, P0_20, P0_21, P0_22, P0_23, P0_24, P0_25, P0_26)
-    ROWS = ()
-    COLS = ()
-    # direction of diode
-    ROW2COL = False
+    ROWS = (5, 18, 23, 19)
+    COLS = (13, 15, 2, 34, 4, 25, 26, 27, 14, 12)  # 2,0,4
 
     def __init__(self):
         key_timer = Timer(0)
-        key_timer.init(
-            period=1, mode=Timer.PERIODIC, callback=lambda t: self.scan(self)
-        )
+        #key_timer.init(period=1, mode=Timer.PERIODIC, callback=lambda t: self.scan(self))
         self.keys = len(self.ROWS) * len(self.COLS)
         self.queue = bytearray(self.keys)
         self.head = 0
         self.tail = 0
         self.length = 0
+        self.state = []  # list of currently pressed keys
         self.rows = []  # row as output
-        for pin in self.ROWS:
-            io = Pin(pin, Pin.OUT, Pin.PUSH_PULL)
+        for row in self.ROWS:
+            io = Pin(row, Pin.OUT)
             io.value(0)
             self.rows.append(io)
         self.cols = []  # col as input
-        for pin in self.COLS:
-            io = Pin(pin, Pin.IN, Pin.PULL_DOWN if self.ROW2COL else Pin.PULL_UP)
+        for col in self.COLS:
+            io = Pin(col, Pin.IN, Pin.PULL_DOWN)
             self.cols.append(io)
         # row selected value depends on diodes' direction
-        self.pressed = bool(self.ROW2COL)
+        self.pressed = True
         self.last = [0] * self.keys  # key last status
-        self.hold = [0] * self.keys  # key hold state
+        self.debounce = [0] * self.keys  # key hold state
         self.matrix = [0] * self.keys  # key current state
         self._debounce_time = 20  # 20 ms
-        self._hold_time = 500  # 500 ms
+        self._hold_time = 200  # 500 ms
 
     def scan(self):
         """
@@ -52,24 +50,51 @@ class Matrix:
         - tap       single press and release
         - hold      hold some time
         """
-        time_ms = time.monotonic_ns() / 1000000
+        time_ms = time.time_ns() / 1000000
         key_index = -1
         for row in self.rows:
-            row.value = self.pressed  # select row
+            row.value(self.pressed)  # select row
             for col in self.cols:
                 key_index += 1
-                current = col.value != self.pressed  # check column
+                current = col.value()  # check column
                 if current != self.last[key_index]:
-                    self.debounce = time_ms
+                    self.debounce[key_index] = time_ms
                 self.last[key_index] = current
-                if time_ms - self.debounce > self._debounce_time:
-                    if time_ms - self.debounce > self._hold_time:
+                if (time_ms - self.debounce[key_index]) > self._debounce_time:
+                    if (time_ms - self.debounce[key_index]) > self._hold_time:
                         # hold detected
                         if current == 1:
                             current = 2
-                    # 0 free; 1 pressed; 2 hold
+                    else:
+                        if current == 0:
+                            current = 3
+                    # 0 key up (free); 1 down; 2 hold; 3 pressed
                     self.matrix[key_index] = current
-            row.value = not self.pressed
+                    # DEBUG
+                    if current != 0:
+                        print('key status {} at row {} col {}'.format(current, row, col))
+            row.value(not self.pressed)
+
+    def decode(self):
+        self.state = []
+        cur_layer = 0
+        for idx in matrix:
+            # scan for layers
+            if self.matrix[idx] == 2:
+                if layer(KEYS_MAP(cur_layer)[idx]):
+                    cur_layer = layer(KEYS_MAP(cur_layer)[idx])
+            pass
+        for idx in matrix:
+            # scan for modifiers
+            if self.matrix[idx] == 3:
+                if KEYS_MAP(cur_layer)[idx] and 0x0F00:
+                    pass
+            pass
+        for idx in matrix:
+            # scan for keys
+            if self.matrix[idx] == 3:
+                self.state.append(KEYS_MAP(cur_layer)[idx] and 0x00FF)
+                # append SHIFT or other modifiers in current key
 
     @property
     def debounce_time(self):

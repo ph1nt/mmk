@@ -36,9 +36,17 @@ bat_old = 0
 bat_new = 0
 time_out = 0
 display.poweroff()
-while True:
+print('keeb main loop')
+while val_old != 5:
     matrix.scan()
+    matrix.decode()
+    val_new = r.value()
+    if val_old != val_new:
+        val_old = val_new
+        print('result =', val_new)
     sleep_ms(5)
+print('The End')
+quit()
 
 val_new = r.value()
 if time_out == 100:

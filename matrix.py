@@ -1,10 +1,8 @@
-##from gc import callbacks
 import time
-from keyboard import KEYS_MAP
-from numpy import matrix
-from keycode import layer
 from machine import Pin
 from machine import Timer
+from keycode import layer
+from keys import key
 
 
 class Matrix:
@@ -34,7 +32,6 @@ class Matrix:
             io = Pin(col, Pin.IN, Pin.PULL_DOWN)
             self.cols.append(io)
         # row selected value depends on diodes' direction
-        self.pressed = True
         self.last = [0] * self.keys  # key last status
         self.debounce = [0] * self.keys  # key hold state
         self.matrix = [0] * self.keys  # key current state
@@ -53,7 +50,7 @@ class Matrix:
         time_ms = time.time_ns() / 1000000
         key_index = -1
         for row in self.rows:
-            row.value(self.pressed)  # select row
+            row.value(1)  # select row
             for col in self.cols:
                 key_index += 1
                 current = col.value()  # check column
@@ -61,40 +58,48 @@ class Matrix:
                     self.debounce[key_index] = time_ms
                 self.last[key_index] = current
                 if (time_ms - self.debounce[key_index]) > self._debounce_time:
-                    if (time_ms - self.debounce[key_index]) > self._hold_time:
-                        # hold detected
-                        if current == 1:
-                            current = 2
+                    if current == 0:
+                        if self.matrix[key_index] == 1:
+                            self.matrix[key_index] = 3
+                        else:
+                            self.matrix[key_index] = 0
                     else:
-                        if current == 0:
-                            current = 3
+                        if (time_ms - self.debounce[key_index]) > self._hold_time:
+                            # hold detected
+                            self.matrix[key_index] = 2
+                        else:
+                            self.matrix[key_index] = 1
                     # 0 key up (free); 1 down; 2 hold; 3 pressed
-                    self.matrix[key_index] = current
-                    # DEBUG
-                    if current != 0:
-                        print('key status {} at row {} col {}'.format(current, row, col))
-            row.value(not self.pressed)
+            row.value(0)
 
     def decode(self):
         self.state = []
         cur_layer = 0
-        for idx in matrix:
+        for idx, val in enumerate(self.matrix):
+            if val > 1:
+                print('key:{} idx:{} val:{}'.format(hex(key(cur_layer, idx)), idx, val))
+
+    def costam():
+        for idx, val in enumerate(self.matrix):
             # scan for layers
-            if self.matrix[idx] == 2:
-                if layer(KEYS_MAP(cur_layer)[idx]):
-                    cur_layer = layer(KEYS_MAP(cur_layer)[idx])
+            if val == 2:
+                print('key:{}'.format(hex(key(cur_layer, idx))))
+                if key(cur_layer, idx) and 0x8000:
+                    cur_layer = layer(key(cur_layer, idx))
+                    print('ustawiono warstwę {}'.format(cur_layer))
             pass
-        for idx in matrix:
+        for idx, val in enumerate(self.matrix):
             # scan for modifiers
-            if self.matrix[idx] == 3:
-                if KEYS_MAP(cur_layer)[idx] and 0x0F00:
+            if val == 2:
+                if key(cur_layer, idx) and 0x0F00:
                     pass
             pass
-        for idx in matrix:
+        for idx, val in enumerate(self.matrix):
             # scan for keys
-            if self.matrix[idx] == 3:
-                self.state.append(KEYS_MAP(cur_layer)[idx] and 0x00FF)
+            if idx == 3:
+                self.state.append(key(cur_layer, idx) and 0x00FF)
                 # append SHIFT or other modifiers in current key
+        print('layer:{} stan:{}'.format(cur_layer, self.state))
 
     @property
     def debounce_time(self):

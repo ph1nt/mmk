@@ -1,16 +1,4 @@
-import microcontroller
-from matrix import Matrix
 from keycode import *
-
-# Pins for ESP32
-Matrix.ROWS = (microcontroller.pin.GPIO19, microcontroller.pin.GPIO23,
-               microcontroller.pin.GPIO18, microcontroller.pin.GPIO5)
-Matrix.COLS = (microcontroller.pin.GPIO25, microcontroller.pin.GPIO26,
-               microcontroller.pin.GPIO27, microcontroller.pin.GPIO14,
-               microcontroller.pin.GPIO12, microcontroller.pin.GPIO13,
-               microcontroller.pin.GPIO15, microcontroller.pin.GPIO2,
-               microcontroller.pin.GPIO0, microcontroller.pin.GPIO4)
-Matrix.ROW2COL = False
 
 KC____ = KC_TRANSPARENT
 KM_ESC = MT(KC_LGUI, KC_ESC)
@@ -22,11 +10,6 @@ KM_UNDR = S(KC_MINUS)
 KM_PIPE = S(KC_BSLS)
 KM_VUP = KC__VOLUP
 KM_VDN = KC__VOLDOWN
-KM_A = MT(C(KC_A), KC_A)
-KM_C = MT(C(KC_C), KC_C)
-KM_X = MT(C(KC_X), KC_X)
-KM_V = MT(C(KC_V), KC_V)
-KM_Z = MT(C(KC_Z), KC_Z)
 UPPER = LT(1, KC_BSPACE)
 LOWER = LT(2, KC_TAB)
 # fmt: off
@@ -34,9 +17,9 @@ KEYS_MAP = (
 # defaults
     #KC_1234, KC_1234, KC_1234, KC_1234, KC_1234, KC_1234, KC_1234, KC_1234, KC_1234, KC_1234
     [KC_Q,    KC_W,    KC_E,    KC_R,    KC_T,    KC_Y,    KC_U,    KC_I,    KC_O,    KC_P,
-     KM_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_H,    KC_J,    KC_K,    KC_L,    KC_SCLN,
-     KM_Z,    KM_X,    KM_C,    KM_V,    KC_B,    KC_N,    KC_M,    KC_COMMA,KC_DOT,  KC_SLASH,
-     KC_NO,   KM_TILD, KM_ESC,  LOWER,   KM_ENTER,KM_SPACE,UPPER,   KC_MUTE, KC_POWER, KC_NO],
+     KC_A,    KC_S,    KC_D,    KC_F,    KC_G,    KC_H,    KC_J,    KC_L,    KC_K,    KC_SCLN,
+     KC_Z,    KC_X,    KC_C,    KC_V,    KC_B,    KC_N,    KC_M,    KC_COMMA,KC_DOT,  KC_SLASH,
+     KM_TILD, KM_ESC,  LOWER,   KC_NO,   KM_ENTER,KM_SPACE,KC_NO,   UPPER,   KC_MUTE, KC_POWER],
 # numbers
     [KC_1,    KC_2,    KC_3,    KC_4,    KC_5,    KC_6,    KC_7,    KC_8,    KC_9,    KC_0,
      KC_F1,   KC_F2,   KC_F3,   KC_F4,   KC_F5,   KC_LBRC, KC_RBRC, KM_PLUS, KC_MINUS,KC_EQUAL,
@@ -49,3 +32,7 @@ KEYS_MAP = (
      KC_NO,   KC____,  KC____,  KC____,  KC____,  KC____,  KC____,  KC____,  KC____,  KC_NO],
 )
 # fmt: on
+
+
+def key(layer, index):
+    return KEYS_MAP[layer][index]

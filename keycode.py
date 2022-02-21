@@ -32,8 +32,6 @@
 # 1llr | mods | keycode     Modifiers with Tap Key(Dual role)
 #   l: layer 00-default, 01-upper, 10-lower, 11-function
 ##
-from asyncio.windows_events import NULL
-
 
 KC_NO = 0x00
 KC_ROLL_OVER = 0x01
@@ -462,7 +460,7 @@ def layer(code):
     if code and 0x8000:
         return (code and 0x6000) >> 13
     else:
-        return NULL
+        return 0
 
 
 def tap(code):
@@ -477,24 +475,50 @@ def hold(code):
 
 
 def LT(layer, key):
-    return 0x8000 or (layer >> 13) or key
+    return 0x8000 + (layer << 13) + key
 
 
-def MT(mod, key):
-    return 0x2000 or (mod >> 8) or key
+def MT(mkey, key):
+    # Mods:   43210
+    #   bit 0 ||||+- Control
+    #   bit 1 |||+-- Shift
+    #   bit 2 ||+--- Alt
+    #   bit 3 |+---- Gui
+    #   bit 4 +----- LR flag(Left: 0, Right: 1)
+    mod = 0
+    if IS_MOD(mkey):
+        if mkey == 0xE0:
+            mod += 1
+        if mkey == 0xE1:
+            mod += 2
+        if mkey == 0xE2:
+            mod += 4
+        if mkey == 0xE3:
+            mod += 8
+        if mkey == 0xE4:
+            mod = mod or 0x11
+        if mkey == 0xE5:
+            mod = mod or 0x12
+        if mkey == 0xE6:
+            mod = mod or 0x14
+        if mkey == 0xE7:
+            mod = mod or 0x18
+        return 0x2000 + (mod << 8) + key
+    else:
+        return 0
 
 
-def C(code): # Control
-    return 0x0100 or code
+def C(code):  # Control
+    return 0x0100 + code
 
 
-def S(code): # Shift
-    return 0x0200 or code
+def S(code):  # Shift
+    return 0x0200 + code
 
 
-def A(code): # Alt / Option
-    return 0x0400 or code
+def A(code):  # Alt / Option
+    return 0x0400 + code
 
 
-def G(code): # Gui / Cmd
-    return 0x0800 or code
+def G(code):  # Gui / Cmd
+    return 0x0800 + code

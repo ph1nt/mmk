@@ -300,10 +300,8 @@ def battery_voltage():
 
 def battery_level():
     voltage = battery_voltage()
-    print('{} mV, RAW: {}'.format(voltage, battery_in.read()))
     i = (voltage - BATTERY_LIMIT) // BATTERY_DELTA
     if i >= len(BATTERY_VOLTAGE):
-        print('i={} len={}'.format(i, len(BATTERY_VOLTAGE)))
         i = len(BATTERY_VOLTAGE) - 1
     elif i < 0:
         i = 0

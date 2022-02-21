@@ -77,7 +77,9 @@ class Matrix:
         cur_layer = 0
         for idx, val in enumerate(self.matrix):
             if val > 1:
+                self.state.append(key(cur_layer, idx) and 0x00FF)
                 print('key:{} idx:{} val:{}'.format(hex(key(cur_layer, idx)), idx, val))
+        return len(self.state)
 
     def costam():
         for idx, val in enumerate(self.matrix):

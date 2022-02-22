@@ -1,26 +1,20 @@
-import time
+'''keyboard matrix'''
+from time import ticks_ms
 from machine import Pin
-from machine import Timer
 from keycode import layer
 from keys import key
 
 
 class Matrix:
-    """
+    '''
     Implement the scan of keyboard matrix
-    """
+    '''
 
     ROWS = (5, 18, 23, 19)
     COLS = (13, 15, 2, 34, 4, 25, 26, 27, 14, 12)  # 2,0,4
 
     def __init__(self):
-        key_timer = Timer(0)
-        #key_timer.init(period=1, mode=Timer.PERIODIC, callback=lambda t: self.scan(self))
         self.keys = len(self.ROWS) * len(self.COLS)
-        self.queue = bytearray(self.keys)
-        self.head = 0
-        self.tail = 0
-        self.length = 0
         self.state = []  # list of currently pressed keys
         self.rows = []  # row as output
         for row in self.ROWS:
@@ -35,19 +29,26 @@ class Matrix:
         self.last = [0] * self.keys  # key last status
         self.debounce = [0] * self.keys  # key hold state
         self.matrix = [0] * self.keys  # key current state
-        self._debounce_time = 20  # 20 ms
+        self._debounce_time = 10  # 10 ms
         self._hold_time = 200  # 500 ms
 
     def scan(self):
-        """
-        Scan keyboard matrix run from Timer(0)
-        four states of key:
+        '''
+        Scan keyboard matrix
+
+        detects states of keys:
         - free      pin.value == 0
         - debounce  wait for stabilisation
         - tap       single press and release
         - hold      hold some time
-        """
-        time_ms = time.time_ns() / 1000000
+
+        Writes output to state[]:
+        - 0 key is up (free)
+        - 1 key is down (unknown, tap or hold)
+        - 2 key is hold (longer than _hold_time)
+        - 3 key was pressed
+        '''
+        time_ms = ticks_ms()
         key_index = -1
         for row in self.rows:
             row.value(1)  # select row
@@ -69,39 +70,30 @@ class Matrix:
                             self.matrix[key_index] = 2
                         else:
                             self.matrix[key_index] = 1
-                    # 0 key up (free); 1 down; 2 hold; 3 pressed
             row.value(0)
 
     def decode(self):
+        '''
+        Try to find what keys is pressed
+
+        Inputs:
+            matrix[] of scanned physical keys
+
+        Returns:
+            length of state[] list of pressed keys
+        '''
         self.state = []
         cur_layer = 0
         for idx, val in enumerate(self.matrix):
-            if val > 1:
+            if val == 2:
+                if layer(key(cur_layer, idx)):
+                    cur_layer = layer(key(cur_layer, idx))
+        # TODO modifiers
+        for idx, val in enumerate(self.matrix):
+            if val == 3:
                 self.state.append(key(cur_layer, idx) and 0x00FF)
                 print('key:{} idx:{} val:{}'.format(hex(key(cur_layer, idx)), idx, val))
         return len(self.state)
-
-    def costam():
-        for idx, val in enumerate(self.matrix):
-            # scan for layers
-            if val == 2:
-                print('key:{}'.format(hex(key(cur_layer, idx))))
-                if key(cur_layer, idx) and 0x8000:
-                    cur_layer = layer(key(cur_layer, idx))
-                    print('ustawiono warstwę {}'.format(cur_layer))
-            pass
-        for idx, val in enumerate(self.matrix):
-            # scan for modifiers
-            if val == 2:
-                if key(cur_layer, idx) and 0x0F00:
-                    pass
-            pass
-        for idx, val in enumerate(self.matrix):
-            # scan for keys
-            if idx == 3:
-                self.state.append(key(cur_layer, idx) and 0x00FF)
-                # append SHIFT or other modifiers in current key
-        print('layer:{} stan:{}'.format(cur_layer, self.state))
 
     @property
     def debounce_time(self):

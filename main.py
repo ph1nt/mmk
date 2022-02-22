@@ -1,9 +1,11 @@
+'''
+MMK
+'''
 from syst import Syst
 from rotary_irq_esp import RotaryIRQ
-from time import sleep_ms, time, ticks_ms, ticks_add, ticks_diff
-from machine import Pin
+from time import ticks_ms, ticks_add, ticks_diff
 from display import Disp
-from battery import battery_level, battery_voltage
+from battery import battery_level
 from matrix import Matrix
 
 matrix = Matrix()
@@ -20,10 +22,6 @@ r = RotaryIRQ(pin_num_clk=17,
               pull_up=True,
               range_mode=RotaryIRQ.RANGE_BOUNDED)
 
-val_old = r.value()
-bat_old = 0
-bat_new = 0
-time_out = 0
 tBattery = 0
 tEncoder = 0
 tKeyboard = 0
@@ -32,11 +30,10 @@ display.logo()
 while True:
     t = ticks_ms()
     if ticks_diff(t, tBattery) > 0:
-        display.battery(battery_level(), battery_voltage())
+        display.battery(battery_level())
         tBattery = ticks_add(t, 500)
     if ticks_diff(t, tEncoder) > 0:
-        val_new = r.value()
-        display.brightness(val_new)
+        display.brightness(r.value())
         tEncoder = ticks_add(t, 10)
     if ticks_diff(t, tKeyboard) > 0:
         matrix.scan()
@@ -46,4 +43,5 @@ while True:
         tKeyboard = ticks_add(t, 1)
     if ticks_diff(t, tDisplay) > 0:
         display.poweroff()
+
 # TODO power safe

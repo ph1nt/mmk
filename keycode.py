@@ -457,25 +457,25 @@ def IS_FN(code): return (KC_FN0 <= (code) and (code) <= KC_FN31)
 
 
 def layer(code):
-    if code and 0x8000:
-        return (code and 0x6000) >> 13
+    if code & 0x8000:
+        return (code & 0x6000) >> 13
     else:
         return 0
 
 
 def tap(code):
-    return code and 0x1FFF
+    return code & 0x1FFF
 
 
 def hold(code):
-    if code and 0x2000:
-        return code and 0x1FFF
+    if code & 0x2000:
+        return code & 0x1FFF
     else:
         layer(code)
 
 
 def LT(layer, key):
-    return 0x8000 + (layer << 13) + key
+    return 0x8000 | (layer << 13) | key
 
 
 def MT(mkey, key):
@@ -488,37 +488,37 @@ def MT(mkey, key):
     mod = 0
     if IS_MOD(mkey):
         if mkey == 0xE0:
-            mod += 1
+            mod |= 1
         if mkey == 0xE1:
-            mod += 2
+            mod |= 2
         if mkey == 0xE2:
-            mod += 4
+            mod |= 4
         if mkey == 0xE3:
-            mod += 8
+            mod |= 8
         if mkey == 0xE4:
-            mod = mod or 0x11
+            mod = mod | 0x11
         if mkey == 0xE5:
-            mod = mod or 0x12
+            mod = mod | 0x12
         if mkey == 0xE6:
-            mod = mod or 0x14
+            mod = mod | 0x14
         if mkey == 0xE7:
-            mod = mod or 0x18
-        return 0x2000 + (mod << 8) + key
+            mod = mod | 0x18
+        return 0x2000 | (mod << 8) | key
     else:
         return 0
 
 
 def C(code):  # Control
-    return 0x0100 + code
+    return 0x0100 | code
 
 
 def S(code):  # Shift
-    return 0x0200 + code
+    return 0x0200 | code
 
 
 def A(code):  # Alt / Option
-    return 0x0400 + code
+    return 0x0400 | code
 
 
 def G(code):  # Gui / Cmd
-    return 0x0800 + code
+    return 0x0800 | code

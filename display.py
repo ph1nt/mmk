@@ -1,15 +1,25 @@
+'''
+library for OLED 128x32
+'''
 from time import time_ns
-from ssd1306 import *
+from ssd1306 import SSD1306_I2C
 from machine import Pin, SoftI2C
 
 
 class Disp(SSD1306_I2C):
+    '''
+    Display functions for 128x32 OLED in MMK
+    '''
+
     def __init__(self, width=128, height=32, _sda=32, _scl=33, addr=0x3C):
         i2c = SoftI2C(sda=Pin(_sda), scl=Pin(_scl))
         self.update = time_ns
         super().__init__(width, height, i2c, addr=0x3C, external_vcc=False)
 
     def logo(self):
+        '''
+        display micropython logo on 128x32 OLED
+        '''
         self.fill(0)
         self.fill_rect(0, 0, 32, 32, 1)
         self.fill_rect(2, 2, 28, 28, 0)
@@ -23,13 +33,25 @@ class Disp(SSD1306_I2C):
         self.contrast(0)
         self.show()
 
-    def battery(self, level, voltage):
-        bat_str = str(level) + '% ' + str(voltage) + 'mV '
+    def battery(self, level):
+        '''
+        display battery level
+
+        Args:
+            level {int}: [0-100%]
+        '''
+        bat_str = str(level) + '% '
         self.fill_rect(40, 12, 87, 8, 0)
         self.text(bat_str, 40, 12, 1)
         self.show()
 
     def brightness(self, value):
+        '''
+        display line corresponding to OLED brightness
+
+        Args:
+            value {int}: [0-100%]
+        '''
         self.fill_rect(0, 31, value * 8, 31, 1)
         self.fill_rect(value * 8, 31, 127, 31, 0)
         self.contrast(value * 8)

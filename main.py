@@ -7,6 +7,11 @@ from time import ticks_ms, ticks_add, ticks_diff
 from display import Disp
 from battery import battery_level
 from matrix import Matrix
+from machine import reset_cause, DEEPSLEEP_RESET
+
+# check if the device woke from a deep sleep
+if reset_cause() == DEEPSLEEP_RESET:
+    print('woke up from a deep sleep')
 
 matrix = Matrix()
 display = Disp()
@@ -43,5 +48,6 @@ while True:
         tKeyboard = ticks_add(t, 1)
     if ticks_diff(t, tDisplay) > 0:
         display.poweroff()
-
-# TODO power safe
+        s.sleep()
+        display.poweron()
+        tDisplay = ticks_add(ticks_ms(), 5000)
